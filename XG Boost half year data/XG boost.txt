@@ -1,0 +1,67 @@
+
+library(dplyr)
+library(readr)
+library(ggplot2)
+  
+  ## Load data
+half_data <- read_csv("E:/Accenture/half_yearly_data.csv")
+New_half <-  half_data[half_data$Prev_Half_avg_Pay != 0 & half_data$H_avg_pay != 0,-c(2,6)]  
+
+
+
+
+#outlier analysis
+#----------------------
+#for Prev_Half_avg_Pay
+iqr <- IQR(New_half$Prev_Half_avg_Pay)
+quartiles <- quantile(New_half$Prev_Half_avg_Pay)   
+
+lb <- quartiles[2] - 2* iqr
+ub <- quartiles[4] + 2* iqr
+
+New_half <- New_half[New_half$Prev_Half_avg_Pay >= lb & New_half$Prev_Half_avg_Pay <= ub,]
+
+
+#outlier analysis
+#----------------------
+#for Prev_Half_avg_Pay
+iqr <- IQR(New_half$H_avg_pay)
+quartiles <- quantile(New_half$H_avg_pay)   
+
+lb <- quartiles[2] - 2* iqr
+ub <- quartiles[4] + 2* iqr
+
+New_half <- New_half[New_half$H_avg_pay >= lb & New_half$H_avg_pay <= ub,]
+
+New_half_u <- New_half[ New_half$Prev_Half_avg_Pay <= New_half$H_avg_pay +30000 ,]
+New_half_u <- New_half_u[ New_half_u$Prev_Half_avg_Pay >= New_half_u$H_avg_pay - 40000 ,]
+
+
+plot(New_half_u$H_avg_pay[New_half_u$Year == '2017' | New_half_u$Year == '2016'] , New_half_u$Prev_Half_avg_Pay[New_half_u$Year == '2017' | New_half_u$Year == '2016'] )
+
+--------------------------------------------------------------
+#range of prev for actual prediction
+range(New_half$H_avg_pay[New_half$Year == '2017' & New_half$Half == 2])
+    
+train <- New_half_u[New_half_u$Year != '2017',]
+test <- New_half_u[New_half_u$Year == '2017',]
+
+#XG boost
+mod1 <- xgboost(data = as.matrix(train$Prev_Half_avg_Pay), label = as.matrix(train$H_avg_pay),
+                nrounds=2200,verbose=FALSE,objective='reg:linear',
+                eval_metric='rmse',nthread=8,eta=0.01,gamma=0.0468,
+                max_depth=6,min_child_weight=1.7817,subsample=0.5213,
+                colsample_bytree=0.4603)
+
+summary(mod1)
+
+pred1 <- predict(mod1, newdata = as.matrix(test$Prev_Half_avg_Pay))
+#install.packages("Metrics")
+library(Metrics)
+actual1 <- test$H_avg_pay
+rmse(actual1, pred1)
+
+evaluate <- (data.frame(pred1, actual1,  tf = pred1 <= actual1+500 &  pred1 >= actual1-500))
+table(evaluate$tf)
+100*22161/(22161+69116)
+
